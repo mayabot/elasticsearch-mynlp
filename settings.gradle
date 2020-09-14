@@ -1,0 +1,8 @@
+rootProject.name = 'mynlp-elasticsearch'
+
+List projects = [
+        'es7:mynlp-plugin',
+        'es7:mynlp-plugin-client'
+]
+
+include projects.toArray(new String[0])

@@ -1,0 +1,80 @@
+apply plugin: 'kotlin'
+apply plugin: 'maven-publish'
+
+dependencies{
+    compileOnly ("org.elasticsearch:elasticsearch:7.0.0"){
+        transitive = false
+    }
+    compileOnly group: 'org.elasticsearch', name: 'elasticsearch-x-content', version: '7.0.0'
+}
+
+task sourceJar(type: Jar) {
+    from sourceSets.main.allSource
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier "javadoc"
+    from javadoc.destinationDir
+}
+
+
+publishing {
+    publications {
+        java(MavenPublication) {
+
+            from components.java
+
+            artifact sourceJar {
+                classifier "source"
+            }
+
+            artifact javadocJar {
+                classifier "javadoc"
+            }
+
+            pom {
+                name = 'mynlp'
+                description = project.description
+                url = 'https://github.com/mayabot/mynlp'
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'jimichan'
+                        name = 'Jimi chan'
+                        email = 'jimichan@gmail.com'
+                    }
+                }
+                scm {
+                    connection = 'scm:git:git@github.com:mayabot/mynlp.git'
+                    developerConnection = 'scm:git:git@github.com:mayabot/mynlp.git'
+                    url = 'git@github.com:mayabot/mynlp.git'
+                }
+            }
+
+        }
+
+    }
+
+    repositories {
+
+        if (project.hasProperty("maya_pri_user")) {
+            maven {
+                name 'MayaPrivate'
+                if (project.version.endsWith('-SNAPSHOT')) {
+                    url "${maya_pri_snapshot}"
+                } else {
+                    url = "${maya_pri_release}"
+                }
+                credentials {
+                    username "${maya_pri_user}"
+                    password "${maya_pri_pass}"
+                }
+            }
+        }
+    }
+}
