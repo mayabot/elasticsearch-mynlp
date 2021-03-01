@@ -1,5 +1,0 @@
-
-subprojects {
-    group 'com.mayabot.es7'
-    version '1.0.2'
-}

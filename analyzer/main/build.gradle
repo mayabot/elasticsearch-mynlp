@@ -1,0 +1,8 @@
+plugins {
+    id 'org.jetbrains.kotlin.jvm'
+    id 'java'
+}
+
+dependencies {
+    compileOnly("org.elasticsearch:elasticsearch:6.6.0")
+}

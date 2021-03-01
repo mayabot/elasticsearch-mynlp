@@ -1,0 +1,12 @@
+apply plugin: 'kotlin'
+
+
+dependencies{
+    api(project(":plugin:plugin-main"))
+}
+
+task esPluginZip(type: Zip,dependsOn:jar) {
+    from configurations.runtimeClasspath
+    from jar
+    from "${project.projectDir}/plugin-metadata"
+}

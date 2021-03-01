@@ -1,8 +1,24 @@
 rootProject.name = 'mynlp-elasticsearch'
 
 List projects = [
-        'es7:mynlp-plugin',
-        'es7:mynlp-plugin-client'
+//        'es7:mynlp-plugin',
+//        'es7:mynlp-plugin-client'
+        "common",
+        "plugin",
+        "plugin:plugin-main",
+        "package",
+        "analyzer",
+        "analyzer:analyzer-main"
 ]
 
 include projects.toArray(new String[0])
+
+
+
+
+//开源全面兼容的解决方案：
+//1. 把和lucene、es api无关的代码合并在common包
+//2. 把Lucene相关的分析器合并到一个包，因为基于lucene 5 之后的版本没有变动过
+//3. 按照功能分别见module，里面再划分es版本区间。
+//4. Plugin也按照es版本区间，估计2和5、6之间的区别比较大，后面的没啥变化
+//5. 一个总的package项目包含所有的子项目，提供esPlugin插件打包合集
