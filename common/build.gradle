@@ -4,7 +4,7 @@ plugins {
 }
 
 dependencies {
-    api("com.mayabot.mynlp:mynlp-all:4.0.0-beta11")
+    api("com.mayabot.mynlp:mynlp-all:4.0.0-beta18")
     api("org.jetbrains.kotlin:kotlin-stdlib")
-    implementation("com.alibaba:fastjson:1.2.75")
+//    implementation("com.alibaba:fastjson:1.2.75")
 }

@@ -13,7 +13,9 @@ import org.elasticsearch.plugins.AnalysisPlugin
 import org.elasticsearch.plugins.Plugin
 import org.elasticsearch.plugins.SearchPlugin
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.security.AccessController
+import java.security.PrivilegedAction
 
 class MynlpPlugin(
     val settings: Settings, val configPath: Path
@@ -31,23 +33,31 @@ class MynlpPlugin(
             AccessController.checkPermission(SpecialPermission())
         }
 
-        mynlp = Mynlp.instance()
+        Mynlp.configer().setDataDir(
+            Paths.get(configPath.toString(),"mynlp.data").toString()
+        )
+
+        Mynlp.configer().setCacheDir(
+            Paths.get(System.getProperty("java.io.tmpdir"),"mynlp.temp").toString()
+        )
 
         mynlpServer = ExtSettings.server.get(settings)
 
-        this.dmsService = DmsService(HttpMynlpResourceService(mynlpServer),mynlp)
+        this.dmsService = AccessController
+            .doPrivileged(
+                PrivilegedAction<DmsService>{
+                    val mynlp = Mynlp.instance()
+                    DmsService(HttpMynlpResourceService(mynlpServer),mynlp)
+                })
 
-        logger.info("MynlpManaPlugin init ok")
+        this.mynlp = dmsService.mynlp
+
+        logger.info("Mynlp Plugin init ok")
     }
 
     override fun getTokenizers(): MutableMap<String, AnalysisModule.AnalysisProvider<TokenizerFactory>> {
         val extra =  HashMap<String, AnalysisModule.AnalysisProvider<TokenizerFactory>>()
 
-//        PinyinMode.names().forEach {
-//            extra[it] = regTokenizerFactory(::PinyinTokenizerFactory)
-//        }
-
-//
         extra["mynlp"] = MynlpDmsAnalysisProvider(dmsService,::MynlpTokenizerFactory)
         extra["mynlp_index_atom"] = MynlpDmsAnalysisProvider(dmsService,::MynlpTokenizerFactory)
         extra["mynlp_index_overlap"] = MynlpDmsAnalysisProvider(dmsService,::MynlpTokenizerFactory)

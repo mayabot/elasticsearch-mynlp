@@ -1,5 +1,6 @@
 package com.mayabot.mynlp
 
+import com.mayabot.mynlp.HttpMynlpResourceService.CorrectionVO
 import com.mayabot.nlp.Mynlp
 import com.mayabot.nlp.module.lucene.MynlpTokenizer
 import com.mayabot.nlp.segment.Lexer
@@ -11,12 +12,10 @@ import com.mayabot.nlp.segment.plugins.correction.MemCorrectionDictionary
 import com.mayabot.nlp.segment.plugins.customwords.MemCustomDictionary
 import com.mayabot.nlp.segment.reader.DefaultStopWordDict
 
-/**
- * 每个命名空间都会对应一个实例
- */
+
 class DmsService(
-    private val client: MynlpResourceService,
-    private val mynlp: Mynlp
+    private val client: HttpMynlpResourceService,
+     val mynlp: Mynlp
 ) {
 
     private val customDictionary = MemCustomDictionary()
@@ -28,45 +27,84 @@ class DmsService(
     /**
      * 基于词典的分词器。对外提供编程方式的分词服务访问
      */
-    val innerLexer: Lexer = mynlp.lexerBuilder()
-        .hmm()
-        .withCorrection(correctionDictionary)
-        .withCustomDictionary(customDictionary)
-        .withPersonName().build()
+    val innerLexer: Lexer = buildInnerPos(false)
 
-    val innerLexerPos: Lexer = mynlp.lexerBuilder()
-        .hmm()
-        .withPos()
-        .withCorrection(correctionDictionary)
-        .withCustomDictionary(customDictionary)
-        .withPersonName().build()
+    val innerLexerPos: Lexer = buildInnerPos(true)
 
-    fun init() {
+    private fun buildInnerPos(doPos: Boolean): Lexer {
+        val builder = mynlp.lexerBuilder()
+            .hmm()
+            .withCorrection(correctionDictionary)
+            .withCustomDictionary(customDictionary)
+            .withPersonName()
+        if (doPos){
+            builder.withPos()
+        }
+
+        val collector = builder.collector()
+
+        collector.fillSubwordCustomDict(customDictionary)
+
+        collector.smartPickup{ spup->
+            spup.setBlackListCallback {word->
+                word[0] == '副' && word[word.length - 1] == '长'
+            }
+        }.done()
+
+
+        return builder.build()
+    }
+
+    internal fun init() {
         // 加载自定义词典，监听如果变化，那么自动重载
-        // bizWordLibService.rebuild(client.loadWord())
-        client.loadWord().map { it.word }
+        loadCustomDictionary(client.loadWord())
+        loadCorrectionDictionary(client.loadCorrection())
 
-        loadCustomDictionary()
+        Thread(Runnable {
 
-        loadCorrectionDictionary()
+            try {
+                Thread.sleep(60*1000*5)
+                // 最简单的实现
+                loadCustomDictionary(client.loadWord())
+                loadCorrectionDictionary(client.loadCorrection())
 
-//        loadStopword()
+            } catch (e: Exception) {
 
-        client.listenWord() {
-            loadCustomDictionary()
+            }
+        }).apply {
+            isDaemon = true
+            this.priority = Thread.MIN_PRIORITY + 2
+        }.start()
+
+//        client.listenWord(scope) {
+//            logger.info("Notify: Word change scope:$scope")
+//            bizWordLibService.rebuild(client.loadWord(scope))
+//            loadCustomDictionary()
 //            loadStopword()
-        }
+//            logger.info("业务词库加载完成 $scope")
+//            client.postEvent(node,MynlpConfigModule.word,"业务词库加载完成",scope)
+//        }
+//
+//        client.listenCorrection(scope) {
+//            logger.info("Notify: Correction change scope:$scope")
+//            loadCorrectionDictionary()
+//            logger.info("分词纠错加载完成 $scope")
+//            client.postEvent(node,MynlpConfigModule.correction,"分词纠错加载完成",scope)
+//        }
+    }
 
-        client.listenCorrection() {
-            loadCorrectionDictionary()
-        }
+    /**
+     * 创建MynlpTokenizer
+     */
+    fun createTokenizer(options: LexerOptions, iterMode: WordTermIterableMode): MynlpTokenizer {
+        return MynlpTokenizer(buildLexer(options),iterMode)
     }
 
     /**
      * 创建个性化的HMM分词器
      */
     fun buildLexer(
-        options:LexerOptions = LexerOptions.DEFAULT
+        options: LexerOptions = LexerOptions.DEFAULT
     ): LexerReader {
         val builder = mynlp.lexerBuilder()
 
@@ -74,7 +112,7 @@ class DmsService(
             LexerOptions.LexerType.HMM ->{
                 builder.hmm()
             }
-            LexerOptions.LexerType.PERCEPTRON->{
+            LexerOptions.LexerType.PERCEPTRON ->{
                 builder.perceptron()
             }
         }
@@ -89,18 +127,22 @@ class DmsService(
             if (customWord) {
                 builder.withCustomDictionary(customDictionary)
             }
-            if (lexerType ==LexerOptions.LexerType.HMM && personName) {
+            if (lexerType == LexerOptions.LexerType.HMM && personName) {
                 builder.withPersonName()
             }
+
 
             when (subWord) {
                 LexerOptions.SubWordMode.none ->{
 
                 }
-                LexerOptions.SubWordMode.smart->{
+                LexerOptions.SubWordMode.smart ->{
                     val collector = builder.collector()
                     if (lexerType == LexerOptions.LexerType.PERCEPTRON) {
                         collector.fillSubwordDict()
+                    }
+                    if (customWord) {
+                        collector.fillSubwordCustomDict(customDictionary)
                     }
                     collector.smartPickup{ spup->
                         spup.setBlackListCallback {word->
@@ -108,11 +150,14 @@ class DmsService(
                         }
                     }.done()
                 }
-                LexerOptions.SubWordMode.index->{
+                LexerOptions.SubWordMode.index ->{
                     //TODO 最小切分长度还可以再设置
                     val collector = builder.collector()
                     if (lexerType == LexerOptions.LexerType.PERCEPTRON) {
                         collector.fillSubwordDict()
+                    }
+                    if (customWord) {
+                        collector.fillSubwordCustomDict(customDictionary)
                     }
                     collector.indexPickup().done()
                 }
@@ -128,47 +173,24 @@ class DmsService(
         }
     }
 
-    fun segment(text: String): Sentence {
-        return innerLexer.scan(text)
-    }
-
-    fun isStopWord(word: String): Boolean {
-        return stopDict.contains(word)
-    }
-
-    private fun loadCustomDictionary() {
+    private fun loadCustomDictionary(words:List<String>) {
         val coreDict = mynlp.getInstance<CoreDictionary>()
         customDictionary.clear()
-        client.loadWord().forEach {
-            if (!coreDict.contains(it.word)) {
-                customDictionary.addWord(it.word)
+        words.forEach {
+            if (!coreDict.contains(it)) {
+                customDictionary.addWord(it)
             }
         }
         customDictionary.rebuild()
     }
 
-//    private fun loadStopword() {
-//        val now = stopDict.reset().toList()
-//        // 如果业务词库中规定了词是非停用词，那么需要执行remove动作
-//        for (s in now) {
-//            bizWordLibService.row(s)?.let {
-//                if (it.weight > 0) {
-//                    stopDict.remove(s)
-//                }
-//            }
-//        }
-//        stopDict.add(bizWordLibService.stopwords())
-//        stopDict.rebuild()
-//    }
 
-    private fun loadCorrectionDictionary() {
-        val data = client.loadCorrection()
+    private fun loadCorrectionDictionary(data:List<CorrectionVO> ) {
         correctionDictionary.clear()
         data.forEach {
             correctionDictionary.addRule(it.rule)
         }
         correctionDictionary.rebuild()
     }
-
 
 }
